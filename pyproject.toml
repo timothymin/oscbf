@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oscbf"
+version = "0.0.1"
+description = "Operational Space Control Barrier Functions"
+authors = [{ name = "Daniel Morton", email = "danielpmorton@gmail.com" }]
+readme = "README.md"
+keywords = ["control", "barrier", "function", "CBF", "Jax", "operational", "space", "safe", "robotics"]
+# TODO: Have a better way of managing these dependencies
+# There was a slowdown introduced in jax 0.4.32
+dependencies = [
+    "numpy<2", # Pybullet has trouble with numpy 2.0
+    "jax==0.4.30",
+    "jaxlib==0.4.30",
+    "cbfpy",
+    "qpax",
+    "pybullet",
+    "matplotlib",
+    # Dependencies from urdfpy... I should try to remove some of these
+    "networkx",
+    "lxml",
+    "trimesh",
+]
+
+[project.urls]
+Repository = "https://github.com/stanfordasl/oscbf/"
+
+[project.optional-dependencies]
+dev = ["pylint", "black"]
+
+[tool.setuptools.packages.find]
+exclude = ["artifacts", "images"]
