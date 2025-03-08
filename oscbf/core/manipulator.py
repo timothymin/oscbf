@@ -665,7 +665,7 @@ class Manipulator:
             Array: The centrifugal and coriolis vector, shape (num_joints,)
         """
         # bijk = 0.5 * (mijk + mikj - mjki)
-        dM_dq = jax.jacobian(self.mass_matrix, argnums=0)(q)
+        dM_dq = jax.jacfwd(self.mass_matrix, argnums=0)(q)
         b = 0.5 * (dM_dq + jnp.swapaxes(dM_dq, 1, 2) - jnp.swapaxes(dM_dq, 0, 2))
         return qd.T @ b @ qd
 
