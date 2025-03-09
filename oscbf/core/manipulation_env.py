@@ -17,7 +17,7 @@ from pybullet_utils.bullet_client import BulletClient
 from oscbf.core.manipulator import Manipulator, load_panda
 from oscbf.utils.visualization import visualize_3D_box
 from oscbf.utils.general_utils import stdout_redirected
-from oscbf.utils.controllers import PoseTaskVelocityController, PoseTaskTorqueController
+from oscbf.core.controllers import PoseTaskVelocityController, PoseTaskTorqueController
 from oscbf.utils.trajectory import TaskTrajectory
 
 

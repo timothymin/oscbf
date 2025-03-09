@@ -21,7 +21,7 @@ from oscbf.core.manipulator import Manipulator, load_panda
 from oscbf.core.manipulation_env import FrankaTorqueControlEnv, FrankaVelocityControlEnv
 from oscbf.core.oscbf_configs import OSCBFTorqueConfig, OSCBFVelocityConfig
 from oscbf.utils.trajectory import SinusoidalTaskTrajectory
-from oscbf.utils.controllers import (
+from oscbf.core.controllers import (
     PoseTaskTorqueController,
     PoseTaskVelocityController,
 )

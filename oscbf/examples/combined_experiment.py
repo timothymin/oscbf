@@ -22,7 +22,7 @@ from cbfpy import CBF
 from oscbf.core.manipulator import Manipulator, load_panda
 from oscbf.core.manipulation_env import FrankaTorqueControlEnv
 from oscbf.core.oscbf_configs import OSCBFTorqueConfig
-from oscbf.utils.controllers import PoseTaskTorqueController
+from oscbf.core.controllers import PoseTaskTorqueController
 
 
 @jax.tree_util.register_static
