@@ -165,13 +165,13 @@ class PoseTaskTorqueController:
 
         if self.is_redundant:
             # Nullspace projection
-            N = jnp.eye(self.n_joints) - J.T @ J_bar.T
+            NT = jnp.eye(self.n_joints) - J.T @ J_bar.T
             # Add nullspace joint task
             q_error = q - des_q
             qdot_error = qdot - des_qdot
             joint_accel = -self.kp_joint * q_error - self.kd_joint * qdot_error
             secondary_joint_torques = M @ joint_accel
-            tau += N @ (secondary_joint_torques + g)
+            tau += NT @ (secondary_joint_torques + g)
 
         # Clamp to torque limits
         return jnp.clip(tau, self.tau_min, self.tau_max)
@@ -401,13 +401,13 @@ class PositionTaskTorqueController:
 
         if self.is_redundant:
             # Nullspace projection
-            N = jnp.eye(self.n_joints) - Jv.T @ J_bar.T
+            NT = jnp.eye(self.n_joints) - Jv.T @ J_bar.T
             # Add nullspace joint task
             q_error = q - des_q
             qdot_error = qdot - des_qdot
             joint_accel = -self.kp_joint * q_error - self.kd_joint * qdot_error
             secondary_joint_torques = M @ joint_accel
-            tau += N @ (secondary_joint_torques + g)
+            tau += NT @ (secondary_joint_torques + g)
 
         # Clamp to torque limits
         return jnp.clip(tau, self.tau_min, self.tau_max)
