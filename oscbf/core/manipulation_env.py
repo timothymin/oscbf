@@ -249,6 +249,11 @@ class ManipulationEnv:
         # Otherwise, respond to GUI inputs from the user
         pos, orn = self.client.getBasePositionAndOrientation(self.target)
         vel, omega = self.client.getBaseVelocity(self.target)
+
+        # HACK: reset the angular vel of the target to 0
+        # Sometimes, the target can start spinning out of control -- this fixes that
+        self.client.resetBaseVelocity(self.target, vel, [0, 0, 0])
+
         # rot = np.ravel(self.client.getMatrixFromQuaternion(orn))
         # Rotate the target so that the Franka EE naturaly faces downwards instead of upwards
         # Also, flatten the rotation matrix to a 1D array
