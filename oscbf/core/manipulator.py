@@ -8,7 +8,7 @@ from jax.typing import ArrayLike
 import jax.numpy as jnp
 import numpy as np
 
-from oscbf.utils.genesis_urdf import parse_urdf
+from oscbf.utils.urdf_parser import parse_urdf
 from oscbf.core.franka_collision_model import franka_collision_data
 
 
