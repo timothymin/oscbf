@@ -397,7 +397,6 @@ class Manipulator:
         """
         return self.ee_transform(q)[:3, :3]
 
-    # TODO make sure this matches up with my existing jacobian code
     @jax.jit
     def ee_jacobian(self, q: Array) -> Array:
         """Compute the basic Jacobian (J_0) of the end effector given the joint configuration
@@ -455,21 +454,6 @@ class Manipulator:
             Array: Time derivative of the end effector Jacobian, shape (6, num_joints)
         """
         return jax.jvp(self.ee_jacobian, (q,), (qd,))[1]
-
-    @jax.jit
-    def pose_task_nullspace_projection(self, q: Array) -> Array:
-        """Compute the nullspace projection matrix for the given joint configuration
-
-        This function assumes that the task of interest is maintaining a desired end effector pose.
-
-        Args:
-            q (Array): Joint positions, shape (num_joints,)
-
-        Returns:
-            Array: Nullspace projection matrix, shape (num_joints, num_joints)
-        """
-        J = self.ee_jacobian(q)
-        return jnp.eye(self.num_joints) - jnp.linalg.pinv(J) @ J
 
     def _link_com_positions(self, joint_transforms: Array) -> Array:
         """Helper function: Compute the positions of all link COMs in world frame, given the joint transforms"""
@@ -659,7 +643,7 @@ class Manipulator:
         Returns:
             Array: The gravity vector, shape (num_joints,)
         """
-        joint_transforms = self.joint_to_world_transforms(q)  # (7, 4, 4)
+        joint_transforms = self.joint_to_world_transforms(q)
         return self._gravity_vector(joint_transforms)
 
     def _gravity_vector(self, joint_transforms: Array) -> Array:
@@ -778,20 +762,22 @@ def load_panda() -> Manipulator:
 
 
 def main():
-    manipulator = load_panda()
-    q = jnp.zeros(manipulator.num_joints)
+    # Quick validation that the manipulator class works
+    robot = load_panda()
+    q = jnp.zeros(robot.num_joints)
+    qdot = 0.1 * jnp.ones(robot.num_joints)
     np.set_printoptions(precision=3, suppress=True)
     print("\nTesting Franka Panda:")
     print("\nMass Matrix: ")
-    print(manipulator.mass_matrix(q))
+    print(robot.mass_matrix(q))
+    print("\nGravity Vector:")
+    print(robot.gravity_vector(q))
+    print("\nCentrifugal/Coriolis Vector:")
+    print(robot.centrifugal_coriolis_vector(q, qdot))
     print("\nEE Jacobian:")
-    print(manipulator.ee_jacobian(q))
+    print(robot.ee_jacobian(q))
     print("\nEE Jacobian Derivative:")
-    qdot = jnp.ones(manipulator.num_joints)
-    print(manipulator.ee_jacobian_derivative(q, qdot))
-    print("\nEE Jacobian Derivative (numerical):")
-    dt = 1e-6
-    print((manipulator.ee_jacobian(q + qdot * dt) - manipulator.ee_jacobian(q)) / dt)
+    print(robot.ee_jacobian_derivative(q, qdot))
 
 
 if __name__ == "__main__":
