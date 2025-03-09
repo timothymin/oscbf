@@ -1,17 +1,13 @@
-"""Testing the performance of the OSCBF on end-effector safe-set containment.
+"""Testing the performance of OSCBF in highly-constrained settings
 
-Want to show:
-- Standard operational space control behavior
-- Standard CBF behavior
-- OSCBF behavior
+We consider a cluttered tabletop environment with many randomized obstacles,
+each represented as a sphere. We then enforce collision avoidance with 
+all of the obstacles, and all of the collision bodies on the robot
 
-Steps:
-- Create an end-effector trajectory to follow which is unsafe
-    - We can start with the end-effector in the safe set and then reach down to an unsafe level
-- Track the EE trajectory with each controller
-- Plot the data:
-    - Safety criteria (h)
-    - Tracking error in non-safety-critical directions
+There are likely "smarter" ways to filter out the collision pairs that are
+least likely to cause a collision, but for now, this test just tries to see
+how much we can scale up the collision avoidance while retaining real-time
+performance.
 """
 
 import os
@@ -28,26 +24,16 @@ import matplotlib.pyplot as plt
 from cbfpy import CBF, CBFConfig
 from oscbf.core.manipulator import Manipulator, load_panda
 from oscbf.core.manipulation_env import FrankaTorqueControlEnv, FrankaVelocityControlEnv
-from oscbf.core.oscbf_torque import (
-    OperationalSpaceCBFConfig,
-    OperationalSpaceCBFController,
-)
-from oscbf.core.oscbf_velocity import (
-    OperationalSpaceVelocityCBFConfig,
-    OperationalSpaceVelocityCBFController,
-)
+from oscbf.core.oscbf_torque_config import OSCBFTorqueConfig
+from oscbf.core.oscbf_velocity_config import OSCBFVelocityConfig
+from oscbf.utils.controllers import PoseTaskTorqueController, PoseTaskVelocityController
 
-DATA_DIR = "oscbf/experiments/data/scaling_collisions/"
-SAVE_DATA = False
-PAUSE_FOR_PICTURES = False
-RECORD_VIDEO = False
-PICTURE_IDXS = [1000, 1250, 1600, 1900, 2200]
 
 np.random.seed(0)
 
 
 @jax.tree_util.register_static
-class CollisionsConfig(OperationalSpaceCBFConfig):
+class CollisionsConfig(OSCBFTorqueConfig):
 
     def __init__(
         self,
@@ -69,7 +55,6 @@ class CollisionsConfig(OperationalSpaceCBFConfig):
         robot_collision_pos_rad = self.robot.link_collision_data(q)
         robot_collision_positions = robot_collision_pos_rad[:, :3]
         robot_collision_radii = robot_collision_pos_rad[:, 3, None]
-        robot_num_pts = robot_collision_positions.shape[0]
         center_deltas = (
             robot_collision_positions[:, None, :] - self.collision_positions[None, :, :]
         ).reshape(-1, 3)
@@ -93,7 +78,7 @@ class CollisionsConfig(OperationalSpaceCBFConfig):
 
 
 @jax.tree_util.register_static
-class CollisionsVelocityConfig(OperationalSpaceVelocityCBFConfig):
+class CollisionsVelocityConfig(OSCBFVelocityConfig):
 
     def __init__(
         self,
@@ -115,7 +100,6 @@ class CollisionsVelocityConfig(OperationalSpaceVelocityCBFConfig):
         robot_collision_pos_rad = self.robot.link_collision_data(q)
         robot_collision_positions = robot_collision_pos_rad[:, :3]
         robot_collision_radii = robot_collision_pos_rad[:, 3, None]
-        robot_num_pts = robot_collision_positions.shape[0]
         center_deltas = (
             robot_collision_positions[:, None, :] - self.collision_positions[None, :, :]
         ).reshape(-1, 3)
@@ -125,7 +109,9 @@ class CollisionsVelocityConfig(OperationalSpaceVelocityCBFConfig):
         h_collision = jnp.linalg.norm(center_deltas, axis=1) - radii_sums
 
         # Whole body table avoidance
-        h_table = robot_collision_positions[:, 2] - self.z_min
+        h_table = (
+            robot_collision_positions[:, 2] - self.z_min - robot_collision_radii.ravel()
+        )
 
         return jnp.concatenate([h_collision, h_table])
 
@@ -136,6 +122,88 @@ class CollisionsVelocityConfig(OperationalSpaceVelocityCBFConfig):
         return 10.0 * h_2
 
 
+# @partial(jax.jit, static_argnums=(0, 1, 2))
+def compute_torque_control(
+    robot: Manipulator,
+    osc_controller: PoseTaskTorqueController,
+    cbf: CBF,
+    z: ArrayLike,
+    z_ee_des: ArrayLike,
+):
+    q = z[: robot.num_joints]
+    qdot = z[robot.num_joints :]
+    M, M_inv, g, c, J, ee_tmat = robot.torque_control_matrices(q, qdot)
+    # Set nullspace desired joint position
+    nullspace_posture_goal = jnp.array(
+        [
+            0.0,
+            -jnp.pi / 6,
+            0.0,
+            -3 * jnp.pi / 4,
+            0.0,
+            5 * jnp.pi / 9,
+            0.0,
+        ]
+    )
+
+    # Compute nominal control
+    u_nom = osc_controller(
+        q,
+        qdot,
+        pos=ee_tmat[:3, 3],
+        rot=ee_tmat[:3, :3],
+        des_pos=z_ee_des[:3],
+        des_rot=jnp.reshape(z_ee_des[3:12], (3, 3)),
+        des_vel=z_ee_des[12:15],
+        des_omega=z_ee_des[15:18],
+        des_accel=jnp.zeros(3),
+        des_alpha=jnp.zeros(3),
+        des_q=nullspace_posture_goal,
+        des_qdot=jnp.zeros(robot.num_joints),
+        J=J,
+        M=M,
+        M_inv=M_inv,
+        g=g,
+        c=c,
+    )
+    # Apply the CBF safety filter
+    return cbf.safety_filter(z, u_nom)
+
+
+# @partial(jax.jit, static_argnums=(0, 1, 2))
+def compute_velocity_control(
+    robot: Manipulator,
+    osc_controller: PoseTaskVelocityController,
+    cbf: CBF,
+    z: ArrayLike,
+    z_ee_des: ArrayLike,
+):
+    q = z[: robot.num_joints]
+    M_inv, J, ee_tmat = robot.dynamically_consistent_velocity_control_matrices(q)
+    pos = ee_tmat[:3, 3]
+    rot = ee_tmat[:3, :3]
+    des_pos = z_ee_des[:3]
+    des_rot = jnp.reshape(z_ee_des[3:12], (3, 3))
+    des_vel = z_ee_des[12:15]
+    des_omega = z_ee_des[15:18]
+    # Set nullspace desired joint position
+    des_q = jnp.array(
+        [
+            0.0,
+            -jnp.pi / 6,
+            0.0,
+            -3 * jnp.pi / 4,
+            0.0,
+            5 * jnp.pi / 9,
+            0.0,
+        ]
+    )
+    u_nom = osc_controller(
+        q, pos, rot, des_pos, des_rot, des_vel, des_omega, des_q, J, M_inv
+    )
+    return cbf.safety_filter(q, u_nom)
+
+
 def main(control_method="torque", num_bodies=25):
     assert control_method in ["torque", "velocity"]
 
@@ -144,32 +212,23 @@ def main(control_method="torque", num_bodies=25):
 
     max_num_bodies = 50
 
-    # Sample a lot of collision point and radii
-    # Positions should be between xyz = (0.2, -0.4, 0.1), (0.8, 0.4, 0.3)
-    # Radii should be between 0.05 and 0.25
+    # Sample a lot of collision bodies
     all_collision_pos = np.random.uniform(
         low=[0.2, -0.4, 0.1], high=[0.8, 0.4, 0.3], size=(max_num_bodies, 3)
     )
     all_collision_radii = np.random.uniform(low=0.01, high=0.1, size=(max_num_bodies,))
-
+    # Only use a subset of them based on the desired quantity
     collision_pos = np.atleast_2d(all_collision_pos[:num_bodies])
     collision_radii = all_collision_radii[:num_bodies]
-
-    # collision_pos = np.array(
-    #     [
-    #         [0.5, 0.5, 0.5],
-    #     ]
-    # )
-    # collision_radii = np.array(
-    #     [
-    #         0.3,
-    #     ]
-    # )
     collision_data = {"positions": collision_pos, "radii": collision_radii}
-    config = CollisionsConfig(robot, z_min, collision_pos, collision_radii)
+
+    torque_config = CollisionsConfig(robot, z_min, collision_pos, collision_radii)
+    torque_cbf = CBF.from_config(torque_config)
     velocity_config = CollisionsVelocityConfig(
         robot, z_min, collision_pos, collision_radii
     )
+    velocity_cbf = CBF.from_config(velocity_config)
+
     timestep = 1 / 240  #  1 / 1000
     bg_color = (1, 1, 1)
     if control_method == "torque":
@@ -179,6 +238,7 @@ def main(control_method="torque", num_bodies=25):
             load_floor=False,
             timestep=timestep,
             collision_data=collision_data,
+            load_table=True,
         )
     else:
         env = FrankaVelocityControlEnv(
@@ -187,6 +247,7 @@ def main(control_method="torque", num_bodies=25):
             load_floor=False,
             timestep=timestep,
             collision_data=collision_data,
+            load_table=True,
         )
 
     env.client.resetDebugVisualizerCamera(
@@ -202,215 +263,57 @@ def main(control_method="torque", num_bodies=25):
     kd_rot = 10.0
     kp_joint = 10.0
     kd_joint = 5.0
-    oscbf_controller = OperationalSpaceCBFController(
-        robot,
-        config,
-        kp_task=np.array([kp_pos, kp_pos, kp_pos, kp_rot, kp_rot, kp_rot]),
-        kd_task=np.array([kd_pos, kd_pos, kd_pos, kd_rot, kd_rot, kd_rot]),
+    osc_torque_controller = PoseTaskTorqueController(
+        n_joints=robot.num_joints,
+        kp_task=np.concatenate([kp_pos * np.ones(3), kp_rot * np.ones(3)]),
+        kd_task=np.concatenate([kd_pos * np.ones(3), kd_rot * np.ones(3)]),
         kp_joint=kp_joint,
         kd_joint=kd_joint,
-        tau_min=-np.asarray(robot.joint_max_forces),
-        tau_max=np.asarray(robot.joint_max_forces),
+        # Note: torque limits will be enforced via the QP. We'll set them to None here
+        # because we don't want to clip the values before the QP
+        tau_min=None,
+        tau_max=None,
     )
 
-    oscbf_velocity_controller = OperationalSpaceVelocityCBFController(
-        robot,
-        velocity_config,
+    osc_velocity_controller = PoseTaskVelocityController(
+        n_joints=robot.num_joints,
         kp_task=np.array([kp_pos, kp_pos, kp_pos, kp_rot, kp_rot, kp_rot]),
         kp_joint=kp_joint,
-        qdot_min=-np.asarray(robot.joint_max_velocities),
-        qdot_max=np.asarray(robot.joint_max_velocities),
+        # Note: velocity limits will be enforced via the QP
+        qdot_min=None,
+        qdot_max=None,
     )
 
     @jax.jit
-    def compute_oscbf_control(joint_state, ee_state_des):
-        # Nullspace task
-        q_des = jnp.array(
-            [0.0, -jnp.pi / 6, 0.0, -3 * jnp.pi / 4, 0.0, 5 * jnp.pi / 9, 0.0]
+    def compute_torque_control_jit(z, z_ee_des):
+        return compute_torque_control(
+            robot, osc_torque_controller, torque_cbf, z, z_ee_des
         )
-        qdot_des = jnp.zeros(robot.num_joints)
-
-        q = joint_state[: robot.num_joints]
-        qdot = joint_state[robot.num_joints :]
-        t_ee = robot.ee_transform(q)
-        J = robot.ee_jacobian(q)
-        pos_ee = t_ee[:3, 3]
-        rot_ee_flat = t_ee[:3, :3].ravel()
-        twist_ee = J @ qdot
-        joint_state_des = jnp.concatenate([q_des, qdot_des])
-        ee_state = jnp.concatenate([pos_ee, rot_ee_flat, twist_ee])
-        return oscbf_controller(joint_state, ee_state, joint_state_des, ee_state_des)
 
     @jax.jit
-    def compute_oscbf_velocity_control(q_qdot, z_zdot_ee_des):
-        # Nullspace task
-        q_des = jnp.array(
-            [0.0, -jnp.pi / 6, 0.0, -3 * jnp.pi / 4, 0.0, 5 * jnp.pi / 9, 0.0]
-        )
-
-        q = q_qdot[: robot.num_joints]
-        t_ee = robot.ee_transform(q)
-        pos_ee = t_ee[:3, 3]
-        rot_ee_flat = t_ee[:3, :3].ravel()
-        ee_pos_des = z_zdot_ee_des[:3]
-        ee_rot_flat_des = z_zdot_ee_des[3:12]
-        ee_twist_des = z_zdot_ee_des[12:]
-
-        joint_state = q
-        ee_state = jnp.concatenate([pos_ee, rot_ee_flat])
-        joint_state_des = q_des
-        ee_state_des = jnp.concatenate([ee_pos_des, ee_rot_flat_des])
-
-        return oscbf_velocity_controller(
-            joint_state, ee_state, joint_state_des, ee_state_des, ee_twist_des
+    def compute_velocity_control_jit(z, z_ee_des):
+        return compute_velocity_control(
+            robot, osc_velocity_controller, velocity_cbf, z, z_ee_des
         )
 
     if control_method == "torque":
-        compute_control = compute_oscbf_control
+        compute_control = compute_torque_control_jit
     elif control_method == "velocity":
-        compute_control = compute_oscbf_velocity_control
+        compute_control = compute_velocity_control_jit
     else:
         raise ValueError(f"Invalid control method: {control_method}")
 
-    times = []
-    # robot_states = []
-    # des_ee_states = []
-
-    if RECORD_VIDEO:
-        input("Press Enter to start recording...")
-        timestamp = time.strftime("%Y%m%d-%H%M%S")
-        log_id = env.client.startStateLogging(
-            env.client.STATE_LOGGING_VIDEO_MP4,
-            f"artifacts/oscbf_dynamic_{control_method}_{timestamp}.mp4",
-        )
-    try:
-        while True:
-            q_qdot = env.get_joint_state()
-            z_zdot_ee_des = env.get_desired_ee_state()
-            start_time = time.perf_counter()
-            tau = compute_control(q_qdot, z_zdot_ee_des)
-            times.append(time.perf_counter() - start_time)
-            env.apply_control(tau)
-            env.step()
-            # robot_states.append(q_qdot)
-            # des_ee_states.append(z_zdot_ee_des)
-    finally:
-        if RECORD_VIDEO:
-            env.client.stopStateLogging(log_id)
-        all_times = np.asarray(times)
-        init_solve_time = all_times[0]
-        # Ignore initial jit compilation time
-        times = np.asarray(all_times[1:])
-        avg_solve_time = np.mean(times)
-        hzs = 1 / times
-        mean_hz = np.mean(hzs)
-        std_hz = np.std(hzs)
-        print(f"Initial solve time: {init_solve_time} seconds")
-        print(f"Average solve time: {avg_solve_time} seconds")
-        print(f"Average Hz: {mean_hz}")
-        print(f"Std Hz: {std_hz}")
-        print(f"Worst case solve time: {np.max(times):.2f} seconds")
-        print(f"Worst case Hz: {1 / np.max(times):.2f}")
-
-        if SAVE_DATA:
-            timestamp = time.strftime("%Y%m%d-%H%M%S")
-            mean_hz_int = int(mean_hz)
-            std_hz_int = int(std_hz)
-            filename = (
-                DATA_DIR
-                + f"{control_method}_{num_bodies}_bodies_{mean_hz_int}_mean_{std_hz_int}_std.npy"
-            )
-            np.save(filename, all_times)
-
-
-# def analyze_data(robot_states, des_ee_states, compute_times):
-
-#     init_solve_time = compute_times[0]
-#     # Ignore initial jit compilation time
-#     times = np.asarray(compute_times[1:])
-#     avg_solve_time = np.mean(times)
-#     hzs = 1 / times
-#     mean_hz = np.mean(hzs)
-#     std_hz = np.std(hzs)
-#     print(f"Initial solve time: {init_solve_time} seconds")
-#     print(f"Average solve time: {avg_solve_time} seconds")
-#     print(f"Average Hz: {mean_hz}")
-#     print(f"Std Hz: {std_hz}")
-#     print(f"Worst case solve time: {np.max(times):.2f} seconds")
-#     print(f"Worst case Hz: {1 / np.max(times):.2f}")
-
-# robot = load_panda()
-
-# @jax.jit
-# def h(robot_state):
-#     q = robot_state[: robot.num_joints]
-#     # Distance from the x limit
-#     x_max = 0.65
-#     return x_max - robot.ee_position(q)[0]
-
-# @jax.jit
-# def xz_position(robot_state):
-#     q = robot_state[: robot.num_joints]
-#     ee_pos = robot.ee_position(q)
-#     return jnp.array([ee_pos[0], ee_pos[2]])
-
-# @jax.jit
-# def tracking_error(robot_state, des_ee_state):
-#     q = robot_state[: robot.num_joints]
-#     robot_tmat = robot.ee_transform(q)
-#     robot_pos = robot_tmat[:3, 3]
-#     robot_rot = robot_tmat[:3, :3]
-#     des_pos = des_ee_state[:3]
-#     des_rot = des_ee_state[3:12].reshape((3, 3))
-#     pos_error = robot_pos - des_pos
-#     rot_error = orientation_error_3D(robot_rot, des_rot)
-#     pos_error_norm = jnp.linalg.norm(pos_error)
-#     rot_error_norm = jnp.linalg.norm(rot_error)
-#     # Hack: copied from above
-#     q_des = jnp.array(
-#         [
-#             0.0,
-#             -np.pi / 6,
-#             0.0,
-#             -3 * np.pi / 4,
-#             0.0,
-#             5 * np.pi / 9,
-#             0.0,
-#         ]
-#     )
-#     posture_error_norm = jnp.linalg.norm(q - q_des)
-#     return jnp.array([pos_error_norm, rot_error_norm, posture_error_norm])
-
-# h_values = jax.vmap(h)(robot_states)
-# xz_positions = jax.vmap(xz_position)(robot_states)
-# # Neglect the first few values
-# xz_positions = xz_positions[1000:]
-# tracking_errors = jax.vmap(tracking_error)(robot_states, des_ee_states)
-
-# # Plot the XZ position of the end-effector
-# plt.figure()
-# plt.plot(xz_positions[:, 0], xz_positions[:, 1])
-# plt.ylim(0.3, 0.6)
-# plt.title("End-effector XZ position")
-# plt.xlabel("X")
-# plt.ylabel("Z")
-# plt.show()
-
-# fig, axs = plt.subplots(1, 4, figsize=(15, 5))
-# axs[0].plot(h_values)
-# axs[0].set_title("h")
-# axs[1].plot(tracking_errors[:, 0])
-# axs[1].set_title("Position tracking error")
-# axs[2].plot(tracking_errors[:, 1])
-# axs[2].set_title("Orientation tracking error")
-# axs[3].plot(tracking_errors[:, 2])
-# axs[3].set_title("Posture tracking error")
-# plt.show()
+    while True:
+        q_qdot = env.get_joint_state()
+        z_zdot_ee_des = env.get_desired_ee_state()
+        tau = compute_control(q_qdot, z_zdot_ee_des)
+        env.apply_control(tau)
+        env.step()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Run end-effector safe-set containment experiment."
+        description="Run highly-constrained collision avoidance experiment."
     )
     parser.add_argument(
         "--control_method",

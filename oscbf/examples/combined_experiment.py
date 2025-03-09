@@ -1,29 +1,32 @@
-import os
-import time
-import argparse
+"""Testing the performance of OSCBF under many different safety constraints, namely:
+
+1. End-effector set containment
+2. Joint limit avoidance
+3. Singularity avoidance
+4. Collision avoidance
+5. Whole-body set containment
+
+While there are many other safety constraints that we could also account for, this
+should give a good view of the controller's performance under common situations
+encountered in practice.
+"""
+
+from functools import partial
 
 import numpy as np
 import jax
 import jax.numpy as jnp
 from jax.typing import ArrayLike
-from jax import Array
-import matplotlib.pyplot as plt
+from cbfpy import CBF
 
-from cbfpy import CBF, CBFConfig
 from oscbf.core.manipulator import Manipulator, load_panda
 from oscbf.core.manipulation_env import FrankaTorqueControlEnv
-from oscbf.core.oscbf_torque import (
-    OperationalSpaceCBFController,
-    OperationalSpaceCBFConfig,
-)
-
-
-DATA_DIR = "oscbf/experiments/data/"
-SAVE_DATA = False
+from oscbf.core.oscbf_torque_config import OSCBFTorqueConfig
+from oscbf.utils.controllers import PoseTaskTorqueController
 
 
 @jax.tree_util.register_static
-class CombinedConfig(OperationalSpaceCBFConfig):
+class CombinedConfig(OSCBFTorqueConfig):
 
     def __init__(
         self,
@@ -51,7 +54,6 @@ class CombinedConfig(OperationalSpaceCBFConfig):
     def h_2(self, z, **kwargs):
         # Extract values
         q = z[: self.num_joints]
-        # ee_pos = z[self.num_joints * 2 : self.num_joints * 2 + 3]
         ee_pos = self.robot.ee_position(q)
         q_min = jnp.asarray(self.q_min)
         q_max = jnp.asarray(self.q_max)
@@ -109,6 +111,54 @@ class CombinedConfig(OperationalSpaceCBFConfig):
         return 10.0 * h_2
 
 
+# @partial(jax.jit, static_argnums=(0, 1, 2))
+def compute_control(
+    robot: Manipulator,
+    osc_controller: PoseTaskTorqueController,
+    cbf: CBF,
+    z: ArrayLike,
+    z_ee_des: ArrayLike,
+):
+    q = z[: robot.num_joints]
+    qdot = z[robot.num_joints :]
+    M, M_inv, g, c, J, ee_tmat = robot.torque_control_matrices(q, qdot)
+    # Set nullspace desired joint position
+    nullspace_posture_goal = jnp.array(
+        [
+            0.0,
+            -jnp.pi / 6,
+            0.0,
+            -3 * jnp.pi / 4,
+            0.0,
+            5 * jnp.pi / 9,
+            0.0,
+        ]
+    )
+
+    # Compute nominal control
+    u_nom = osc_controller(
+        q,
+        qdot,
+        pos=ee_tmat[:3, 3],
+        rot=ee_tmat[:3, :3],
+        des_pos=z_ee_des[:3],
+        des_rot=jnp.reshape(z_ee_des[3:12], (3, 3)),
+        des_vel=z_ee_des[12:15],
+        des_omega=z_ee_des[15:18],
+        des_accel=jnp.zeros(3),
+        des_alpha=jnp.zeros(3),
+        des_q=nullspace_posture_goal,
+        des_qdot=jnp.zeros(robot.num_joints),
+        J=J,
+        M=M,
+        M_inv=M_inv,
+        g=g,
+        c=c,
+    )
+    # Apply the CBF safety filter
+    return cbf.safety_filter(z, u_nom)
+
+
 def main():
     robot = load_panda()
     ee_pos_min = np.array([0.15, -0.25, 0.25])
@@ -127,6 +177,7 @@ def main():
         wb_pos_min,
         wb_pos_max,
     )
+    cbf = CBF.from_config(config)
     env = FrankaTorqueControlEnv(
         config.pos_min,
         config.pos_max,
@@ -151,71 +202,28 @@ def main():
     kd_rot = 10.0
     kp_joint = 10.0
     kd_joint = 5.0
-    controller = OperationalSpaceCBFController(
-        robot,
-        config,
-        kp_task=np.array([kp_pos, kp_pos, kp_pos, kp_rot, kp_rot, kp_rot]),
-        kd_task=np.array([kd_pos, kd_pos, kd_pos, kd_rot, kd_rot, kd_rot]),
+    osc_controller = PoseTaskTorqueController(
+        n_joints=robot.num_joints,
+        kp_task=np.concatenate([kp_pos * np.ones(3), kp_rot * np.ones(3)]),
+        kd_task=np.concatenate([kd_pos * np.ones(3), kd_rot * np.ones(3)]),
         kp_joint=kp_joint,
         kd_joint=kd_joint,
-        # TODO: Realistic torque limits
-        tau_min=-100.0 * np.ones(robot.num_joints),
-        tau_max=100.0 * np.ones(robot.num_joints),
+        # Note: torque limits will be enforced via the QP. We'll set them to None here
+        # because we don't want to clip the values before the QP
+        tau_min=None,
+        tau_max=None,
     )
 
     @jax.jit
-    def compute_control(joint_state, ee_state_des):
-        # Nullspace task
-        q_des = jnp.array(
-            [0.0, -jnp.pi / 6, 0.0, -3 * jnp.pi / 4, 0.0, 5 * jnp.pi / 9, 0.0]
-        )
-        qdot_des = jnp.zeros(robot.num_joints)
+    def compute_control_jit(z, z_des):
+        return compute_control(robot, osc_controller, cbf, z, z_des)
 
-        q = joint_state[: robot.num_joints]
-        qdot = joint_state[robot.num_joints :]
-        t_ee = robot.ee_transform(q)
-        J = robot.ee_jacobian(q)
-        pos_ee = t_ee[:3, 3]
-        rot_ee_flat = t_ee[:3, :3].ravel()
-        twist_ee = J @ qdot
-        joint_state_des = jnp.concatenate([q_des, qdot_des])
-        ee_state = jnp.concatenate([pos_ee, rot_ee_flat, twist_ee])
-        return controller(joint_state, ee_state, joint_state_des, ee_state_des)
-
-    times = []
-    robot_states = []
-    des_ee_states = []
-    timestep = env.client.getPhysicsEngineParameters()["fixedTimeStep"]
-    try:
-        while True:
-            joint_state = env.get_joint_state()
-            ee_state_des = env.get_desired_ee_state()
-            start_time = time.perf_counter()
-            tau = compute_control(joint_state, ee_state_des)
-            times.append(time.perf_counter() - start_time)
-            env.apply_control(tau)
-            env.step()
-            robot_states.append(joint_state)
-            des_ee_states.append(ee_state_des)
-    finally:
-        times = np.asarray(times)
-        init_solve_time = times[0]
-        avg_solve_time = np.mean(times[1:])
-        hzs = 1 / times[1:]
-        mean_hz = np.mean(hzs)
-        std_hz = np.std(hzs)
-        print(f"Initial solve time: {init_solve_time} seconds")
-        print(f"Average solve time: {avg_solve_time} seconds")
-        print(f"Average Hz: {mean_hz}")
-        print(f"Std Hz: {std_hz}")
-
-        if SAVE_DATA:
-            timestamp = time.strftime("%Y%m%d-%H%M%S")
-            folder_path = DATA_DIR + f"{timestamp}/"
-            os.makedirs(folder_path, exist_ok=True)
-            np.save(folder_path + "robot_states.npy", robot_states)
-            np.save(folder_path + "des_ee_states.npy", des_ee_states)
-            np.save(folder_path + "compute_times.npy", times)
+    while True:
+        joint_state = env.get_joint_state()
+        ee_state_des = env.get_desired_ee_state()
+        tau = compute_control_jit(joint_state, ee_state_des)
+        env.apply_control(tau)
+        env.step()
 
 
 if __name__ == "__main__":
