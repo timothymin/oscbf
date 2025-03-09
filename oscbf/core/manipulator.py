@@ -664,10 +664,12 @@ class Manipulator:
         Returns:
             Array: The centrifugal and coriolis vector, shape (num_joints,)
         """
-        # bijk = 0.5 * (mijk + mikj - mjki)
-        dM_dq = jax.jacfwd(self.mass_matrix, argnums=0)(q)
-        b = 0.5 * (dM_dq + jnp.swapaxes(dM_dq, 1, 2) - jnp.swapaxes(dM_dq, 0, 2))
-        return qd.T @ b @ qd
+        # JVP gives us d(M@qd)/dq_i * qd_i
+        jvp_result = jax.jvp(lambda q_: self.mass_matrix(q_) @ qd, (q,), (qd,))[1]
+        # VJP gives us qd.T @ dM/dq_i * qd_i
+        vjp_fun = jax.vjp(lambda q_: qd.T @ self.mass_matrix(q_), q)[1]
+        vjp_result = vjp_fun(qd)[0]
+        return jvp_result - 0.5 * vjp_result
 
     @jax.jit
     def torque_control_matrices(
