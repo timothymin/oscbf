@@ -556,11 +556,9 @@ class Manipulator:
 
         # Note: The jacobian associated with link i only depends on the joints j <= i
         # So, use a lower triangular mask to only include these components
-        mask = jnp.tril_indices(n=self.num_joints, k=0, m=self.num_joints)
-        Jv_Ts_init = jnp.zeros((self.num_joints, self.num_joints, 3))
-        return Jv_Ts_init.at[mask].set(
-            (epsilon * stacked_axes)[mask] + (epsilon_bar * lever_arms)[mask]
-        )
+        mask_matrix = jnp.tril(jnp.ones((self.num_joints, self.num_joints)))
+        mask_3d = mask_matrix[:, :, jnp.newaxis]
+        return mask_3d * (epsilon * stacked_axes + epsilon_bar * lever_arms)
 
     def _get_angular_jacobians_transposed(self, joint_transforms: Array) -> Array:
         """Helper function: Compute an array containing the angular jacobians Jw for every link
@@ -586,9 +584,9 @@ class Manipulator:
         ).squeeze(axis=2)
 
         stacked_axes = jnp.tile(joint_axes_world_frame, (self.num_joints, 1, 1))
-        mask = jnp.tril_indices(n=self.num_joints, k=0, m=self.num_joints)
-        Jw_Ts_init = jnp.zeros((self.num_joints, self.num_joints, 3))
-        return Jw_Ts_init.at[mask].set((epsilon_bar * stacked_axes)[mask])
+        mask_matrix = jnp.tril(jnp.ones((self.num_joints, self.num_joints)))
+        mask_3d = mask_matrix[:, :, jnp.newaxis]
+        return mask_3d * (epsilon_bar * stacked_axes)
 
     @jax.jit
     def mass_matrix(self, q: Array) -> Array:
