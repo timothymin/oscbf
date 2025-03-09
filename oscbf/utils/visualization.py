@@ -1,6 +1,6 @@
-# From pyastrobee
+"""Pybullet debug visualizer helper functions"""
 
-from typing import Union, Optional
+from typing import Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -17,7 +17,7 @@ def visualize_3D_box(
     """Visualize a box in Pybullet
 
     Args:
-        box (npt.ArrayLike): Box to visualize. If an array, must be of shape (1, 2, box_dim)
+        box (npt.ArrayLike): Lower and upper xyz limits of the axis-aligned box, shape (2, 3)
         padding (Optional[npt.ArrayLike]): If expanding (or contracting) the boxes by a certain amount, include the
             (x, y, z) padding distances here (shape (3,)). Defaults to None.
         rgba (npt.ArrayLike): Color of the box (RGB + alpha), shape (4,). Defaults to (1, 0, 0, 0.5).

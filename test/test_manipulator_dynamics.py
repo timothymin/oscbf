@@ -8,7 +8,6 @@ from oscbf.utils.general_utils import find_assets_dir
 import pybullet
 import jax.numpy as jnp
 import numpy as np
-import jax
 
 try:
     import pinocchio as pin
@@ -20,7 +19,8 @@ except ImportError:
 URDF = find_assets_dir() + "franka_panda/panda.urdf"
 
 
-class DynamicsTestPinocchio(unittest.TestCase):
+class PinocchioDynamicsTest(unittest.TestCase):
+    """Test cases to validate the manipulator dynamics against Pinocchio's values"""
 
     @classmethod
     def setUpClass(cls):
@@ -28,8 +28,8 @@ class DynamicsTestPinocchio(unittest.TestCase):
             raise unittest.SkipTest("Pinocchio not installed")
         cls.model = pin.buildModelFromUrdf(URDF)
         cls.data = pin.Data(cls.model)
-        cls.robot_dynamics = Manipulator.from_urdf(URDF)
-        cls.num_joints = cls.robot_dynamics.num_joints
+        cls.robot = Manipulator.from_urdf(URDF)
+        cls.num_joints = cls.robot.num_joints
         np.random.seed(0)
 
     def test_mass_matrix(self):
@@ -38,7 +38,7 @@ class DynamicsTestPinocchio(unittest.TestCase):
             dq = np.zeros(self.num_joints)
             pin.forwardKinematics(self.model, self.data, q, dq)
             pin.updateFramePlacements(self.model, self.data)
-            M = self.robot_dynamics.mass_matrix(q)
+            M = self.robot.mass_matrix(q)
             Mpin = pin.crba(self.model, self.data, q)
             np.testing.assert_array_almost_equal(M, Mpin, decimal=4)
 
@@ -49,12 +49,12 @@ class DynamicsTestPinocchio(unittest.TestCase):
             pin.forwardKinematics(self.model, self.data, q, dq)
             pin.updateFramePlacements(self.model, self.data)
             bias = pin.nle(self.model, self.data, q, dq)
-            G = self.robot_dynamics.gravity_vector(q)
-            C = self.robot_dynamics.centrifugal_coriolis_vector(q, dq)
+            G = self.robot.gravity_vector(q)
+            C = self.robot.centrifugal_coriolis_vector(q, dq)
             np.testing.assert_array_almost_equal(G + C, bias, decimal=4)
 
 
-class DynamicsTest(unittest.TestCase):
+class PybulletDynamicsTest(unittest.TestCase):
     """Test cases to validate the manipulator dynamics against Pybullet's values"""
 
     @classmethod
@@ -67,12 +67,8 @@ class DynamicsTest(unittest.TestCase):
             flags=pybullet.URDF_USE_INERTIA_FROM_FILE,
         )
         pybullet.setGravity(0, 0, -9.81)
-        # cls.robot_dynamics = SerialManipulator(urdf_filename, "base_link", "link3")
-        # cls.robot_dynamics = SerialManipulator(
-        #     urdf_filename, "panda_link0", "panda_link7"
-        # )
-        cls.robot_dynamics = Manipulator.from_urdf(URDF)
-        cls.num_joints = cls.robot_dynamics.num_joints
+        cls.robot = Manipulator.from_urdf(URDF)
+        cls.num_joints = cls.robot.num_joints
         np.random.seed(0)
 
     @classmethod
@@ -83,7 +79,7 @@ class DynamicsTest(unittest.TestCase):
         for i in range(10):
             q = np.random.uniform(-np.pi / 2, np.pi / 2, self.num_joints)
             mass_matrix = pybullet.calculateMassMatrix(self.robot_id, q.tolist())
-            M = self.robot_dynamics.mass_matrix(q)
+            M = self.robot.mass_matrix(q)
             np.testing.assert_array_almost_equal(M, mass_matrix, decimal=4)
 
     def test_gravity_vector(self):
@@ -95,7 +91,7 @@ class DynamicsTest(unittest.TestCase):
             gravity_torques = pybullet.calculateInverseDynamics(
                 self.robot_id, q.tolist(), zero_velocities, zero_accelerations
             )
-            G = self.robot_dynamics.gravity_vector(q)
+            G = self.robot.gravity_vector(q)
             np.testing.assert_array_almost_equal(G, gravity_torques, decimal=4)
 
     def test_coriolis_vector(self):
@@ -117,7 +113,7 @@ class DynamicsTest(unittest.TestCase):
                 gravity_torques
             )
 
-            C = self.robot_dynamics.centrifugal_coriolis_vector(q, qd)
+            C = self.robot.centrifugal_coriolis_vector(q, qd)
             np.testing.assert_array_almost_equal(C, coriolis_torques, decimal=4)
 
     def test_jacobian(self):
@@ -130,7 +126,7 @@ class DynamicsTest(unittest.TestCase):
                 self.robot_id, link_index, (0, 0, 0), q.tolist(), qdot, qddot
             )
             J_pybullet = np.row_stack([np.array(jv), np.array(jw)])
-            J = self.robot_dynamics.ee_jacobian(q)
+            J = self.robot.ee_jacobian(q)
             np.testing.assert_array_almost_equal(J, J_pybullet, decimal=4)
 
 

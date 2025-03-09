@@ -16,6 +16,9 @@ import numpy as np
 from oscbf.core.manipulator import Manipulator
 
 URDF = "oscbf/assets/franka_panda/panda.urdf"
+FRANKA_INIT_QPOS = np.array(
+    [0.0, -np.pi / 6, 0.0, -3 * np.pi / 4, 0.0, 5 * np.pi / 9, 0.0]
+)
 
 
 def visualize_parsed_tfs(urdf: str, randomize: bool = False):
@@ -33,6 +36,10 @@ def visualize_parsed_tfs(urdf: str, randomize: bool = False):
         # Set some random joint angles
         for i in range(manipulator.num_joints):
             pybullet.resetJointState(robot, i, 2 * np.random.rand() - 1)
+    else:
+        # Use a "good" initial joint configuration
+        for i in range(manipulator.num_joints):
+            pybullet.resetJointState(robot, i, FRANKA_INIT_QPOS[i])
 
     num_lines = manipulator.num_joints - 1
     lines = [-1] * num_lines  # init

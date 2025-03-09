@@ -8,7 +8,8 @@ with a secondary null space posture target)
 
 Note: The CBFs themselves are not included in this file. These should 
 inherit from these configs, and implement the h_1/h_2 methods
-depending on the desired safety criteria.
+depending on the desired safety criteria. For examples of this,
+see the `oscbf/examples` folder
 """
 
 import jax.numpy as jnp
@@ -23,8 +24,17 @@ USE_CENTRIFUGAL_CORIOLIS_IN_CBF = True
 class OSCBFTorqueConfig(CBFConfig):
     """CBF Configuration for safe torque-controlled manipulation
 
-    z = [q, qdot] (length = 2 * num_joints)
-    u = [joint torques] (length = num_joints)
+    State: z = [q, qdot] (length = 2 * num_joints)
+    Control: u = [joint torques] (length = num_joints)
+
+    Args:
+        robot (Manipulator): The robot model (kinematics and dynamics)
+        pos_obj_weight (float, optional): Objective function weight for the safety filter's
+            impact on the end-effector's position tracking performance. Defaults to 1.0.
+        rot_obj_weight (float, optional): Objective function weight for the safety filter's
+            impact on the end-effector's orientation tracking performance. Defaults to 1.0.
+        joint_obj_weight (float, optional): Objective function weight for the safety filter's
+            impact on the joint space tracking performance. Defaults to 1.0.
     """
 
     def __init__(
@@ -118,20 +128,38 @@ class OSCBFTorqueConfig(CBFConfig):
 class OSCBFVelocityConfig(CBFConfig):
     """CBF Configuration for safe velocity-controlled manipulation
 
-    z = [q] (length = num_joints)
-    u = [joint velocities] (length = num_joints)
+    State: z = [q] (length = num_joints)
+    Control: u = [joint velocities] (length = num_joints)
+
+    Args:
+        robot (Manipulator): The robot model (kinematics and dynamics)
+        pos_obj_weight (float, optional): Objective function weight for the safety filter's
+            impact on the end-effector's position tracking performance. Defaults to 1.0.
+        rot_obj_weight (float, optional): Objective function weight for the safety filter's
+            impact on the end-effector's orientation tracking performance. Defaults to 1.0.
+        joint_obj_weight (float, optional): Objective function weight for the safety filter's
+            impact on the joint space tracking performance. Defaults to 1.0.
     """
 
-    def __init__(self, robot: Manipulator):
+    def __init__(
+        self,
+        robot: Manipulator,
+        pos_obj_weight: float = 1.0,
+        rot_obj_weight: float = 1.0,
+        joint_obj_weight: float = 1.0,
+    ):
+        assert isinstance(robot, Manipulator)
+        assert isinstance(pos_obj_weight, (tuple, float)) and pos_obj_weight >= 0
+        assert isinstance(rot_obj_weight, (tuple, float)) and rot_obj_weight >= 0
+        assert isinstance(joint_obj_weight, (tuple, float)) and joint_obj_weight >= 0
         self.robot = robot
         self.num_joints = self.robot.num_joints
         self.task_dim = 6  # Pose
         self.is_redundant = self.robot.num_joints > self.task_dim
 
-        # TODO reorganize where these go??
-        self.pos_obj_weight = 1.0
-        self.rot_obj_weight = 1.0
-        self.joint_space_obj_weight = 1.0
+        self.pos_obj_weight = float(pos_obj_weight)
+        self.rot_obj_weight = float(rot_obj_weight)
+        self.joint_space_obj_weight = float(joint_obj_weight)
         # Store the diagonal of W.T @ W for the task and joint space weighting matrices
         # This assumes that W is a diagonal matrix with only positive values
         self.W_T_W_task_diag = tuple(

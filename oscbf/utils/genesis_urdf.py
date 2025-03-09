@@ -1,10 +1,15 @@
-import os
+"""This URDF parser was extracted from the Genesis simulation project
+and hackily modified to work with this code
+
+This could use some significant cleanup, but it works for now
+
+Note: I tried a few other different ways of parsing URDFs, for instance,
+using pybullet's urdf parser, or urdf_parser_py. This urdfpy-based method
+seemed to best handle the frame definitions and merging fixed links.
+"""
 
 import numpy as np
-
-# import trimesh
 from oscbf.utils import urdfpy
-from oscbf.utils.general_utils import find_assets_dir
 
 
 def parse_urdf(filename):

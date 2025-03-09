@@ -1,6 +1,6 @@
 """Dynamics of a serial manipulator"""
 
-from typing import Tuple
+from typing import Tuple, Optional
 
 import jax
 from jax import Array
@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from oscbf.utils.genesis_urdf import parse_urdf
-from oscbf.core.franka_collision_model import collision_data
+from oscbf.core.franka_collision_model import franka_collision_data
 
 
 def tuplify(arr):
@@ -159,6 +159,12 @@ def joint_transform(
 
 @jax.tree_util.register_static
 class Manipulator:
+    """Manipulator kinematics and dynamics
+
+    Note: the main constructor for this class is via the `from_urdf` classmethod.
+    See this method for more details
+    """
+
     def __init__(
         self,
         num_joints: int,
@@ -244,12 +250,26 @@ class Manipulator:
     def from_urdf(
         cls,
         urdf_filename: str,
-        ee_offset: ArrayLike | None = None,
-        collision_data: dict | None = None,
+        ee_offset: Optional[ArrayLike] = None,
+        collision_data: Optional[dict] = None,
     ) -> "Manipulator":
-        # NOTE: Assumes that the URDF does not contain any joints that we do not care about in the CBF
-        # For instance, gripper joints
-        # If the URDF does contain this info, convert those joints to fixed joints
+        """Construct a Manipulator object from a parsed URDF file
+
+        Note: the URDF should only contain joints that are part of the kinematic chain and thus
+        are going to be actively controlled. All other joints should be set to "fixed" so that their
+        kinematics and dynamics properties are merged into the chain.
+
+        Args:
+            urdf_filename (str): Path to the URDF file
+            ee_offset (ArrayLike, optional): End-effector / tool-center-point transformation
+                from the last joint frame, shape (4, 4). Defaults to None.
+            collision_data (dict, optional): Collision geometry for each link, stored as a dictionary
+                where data["positions"] => list of sphere center points in each link frame, and
+                data["radii"] => list of sphere radii for each body. Defaults to None.
+
+        Returns:
+            Manipulator: The manipulator object constructed from the URDF
+        """
 
         data = parse_urdf(urdf_filename)
         data = {k: tuplify(v) for k, v in data.items()}
@@ -262,7 +282,6 @@ class Manipulator:
             collision_positions = ()
             collision_radii = ()
 
-        # ee offset is the transformation matrix between the end effector and the last joint
         if ee_offset is None:
             ee_offset = tuplify(np.eye(4))
         else:
@@ -284,7 +303,7 @@ class Manipulator:
             link_local_inertias=data["link_local_inertias"],
             link_local_inertia_positions=data["link_local_inertia_positions"],
             link_local_inertia_rotations=data["link_local_inertia_rotations"],
-            # TEMP HACK: ignore base data
+            # TEMP: ignore base data
             base_pos=None,  # tuple(data["base_pos"]),
             base_orn=None,  # tuple(data["base_orn"]),
             ee_offset=ee_offset,
@@ -754,7 +773,7 @@ def load_panda() -> Manipulator:
                 [0.0, 0.0, 0.0, 1.0],
             ]
         ),
-        collision_data=collision_data,
+        collision_data=franka_collision_data,
     )
 
 

@@ -2,45 +2,7 @@
 
 import os
 import sys
-import warnings
-from enum import Enum
 from contextlib import contextmanager
-
-
-class ANSITextStyles(Enum):
-    """A non-exhaustive list of ANSI text styles for use in terminal output."""
-
-    BLACK = "\033[30m"
-    RED = "\033[31m"
-    ORANGE = "\033[38;5;214m"  # 256-color mode
-    YELLOW = "\033[33m"
-    GREEN = "\033[32m"
-    BLUE = "\033[34m"
-    MAGENTA = "\033[35m"
-    CYAN = "\033[36m"
-    WHITE = "\033[37m"
-    COLOR_DEFAULT = "\033[39m"
-    BOLD = "\033[1m"
-    UNDERLINE = "\033[4m"
-    INVISIBLE = "\033[08m"
-    BG_BLACK = "\033[40m"
-    BG_RED = "\033[41m"
-    BG_ORANGE = "\033[48;5;214m"  # 256-color mode
-    BG_YELLOW = "\033[43m"
-    BG_GREEN = "\033[42m"
-    BG_BLUE = "\033[44m"
-    BG_MAGENTA = "\033[45m"
-    BG_CYAN = "\033[46m"
-    BG_WHITE = "\033[47m"
-    BG_DEFAULT = "\033[49m"
-    RESET = "\033[0m"
-
-
-def print_warning(msg: str) -> None:
-    """Print a warning message with ANSI color formatting."""
-    warnings.warn(
-        f"{ANSITextStyles.YELLOW.value}{msg}{ANSITextStyles.RESET.value}", stacklevel=2
-    )
 
 
 # NOTE: This might be overkill if we always assume that this script is in the utils/ folder. But, it seems to work
@@ -105,24 +67,3 @@ def stdout_redirected(to: str = os.devnull):
             _redirect_stdout(to=old_stdout)  # restore stdout.
             # buffering and flags such as
             # CLOEXEC may be different
-
-
-## Tests ##
-
-
-def _test_styles():
-    for fmt in ANSITextStyles:
-        print(f"{fmt.name}: {fmt.value}{fmt.name}{ANSITextStyles.RESET.value}")
-
-
-def _test_warning():
-    print_warning("This is a warning message.")
-
-
-def main():
-    _test_styles()
-    _test_warning()
-
-
-if __name__ == "__main__":
-    main()

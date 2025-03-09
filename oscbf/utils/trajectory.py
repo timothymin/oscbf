@@ -1,4 +1,4 @@
-"""Trajectory abstract classes"""
+"""Trajectories"""
 
 from abc import ABC, abstractmethod
 import numpy as np
@@ -70,7 +70,15 @@ class JointTrajectory(ABC):
 
 
 class SinusoidalTaskTrajectory(TaskTrajectory):
-    """An example sinusoidal task-space position trajectory for the robot to follow"""
+    """An example sinusoidal task-space position trajectory for the robot to follow
+
+    Args:
+        init_pos (np.ndarray): Initial position of the end-effector, shape (3,)
+        init_rot (np.ndarray): Initial rotation of the end-effector, shape (3, 3)
+        amplitude (np.ndarray): X,Y,Z amplitudes of the sinusoid, shape (3,)
+        angular_freq (np.ndarray): X,Y,Z angular frequencies of the sinusoid, shape (3,)
+        phase (np.ndarray): X,Y,Z phase offsets of the sinusoid, shape (3,)
+    """
 
     def __init__(
         self,

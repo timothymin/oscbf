@@ -120,4 +120,4 @@ radii_list = (
     link_7_radii,
 )
 
-collision_data = {"positions": positions_list, "radii": radii_list}
+franka_collision_data = {"positions": positions_list, "radii": radii_list}

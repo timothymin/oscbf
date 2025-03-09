@@ -7,8 +7,6 @@ The reduced-order (velocity-control) OSCBF has no lower-level understanding of t
 limits, so the full-order (torque-control) OSCBF should perform better in this case.
 """
 
-import os
-import time
 import argparse
 from functools import partial
 
@@ -16,10 +14,9 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 from jax.typing import ArrayLike
-from jax import Array
-import matplotlib.pyplot as plt
 
-from cbfpy import CBF, CBFConfig
+
+from cbfpy import CBF
 from oscbf.core.manipulator import Manipulator, load_panda
 from oscbf.core.manipulation_env import FrankaTorqueControlEnv, FrankaVelocityControlEnv
 from oscbf.core.oscbf_configs import OSCBFTorqueConfig, OSCBFVelocityConfig

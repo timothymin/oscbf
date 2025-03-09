@@ -37,7 +37,7 @@ class ManipulationEnv:
             The dictionary should have keys "positions" and "radii". Defaults to None.
         wb_xyz_min (Optional[ArrayLike]): Minimum bounds of the whole-body safe region, shape (3,). Defaults to None.
         wb_xyz_max (Optional[ArrayLike]): Maximum bounds of the whole-body safe region, shape (3,). Defaults to None.
-        bg_color (Optional[Tuple[float, float, float]]): RGB background color of the simulation. Defaults to None
+        bg_color (Optional[ArrayLike]): RGB background color of the simulation. Defaults to None
             (use default background color)
         load_floor (bool): Whether to load a floor into the simulation. Defaults to True.
         qdot_max (Optional[ArrayLike]): Maximum joint velocities, shape (num_joints,). Defaults to None.
@@ -59,7 +59,7 @@ class ManipulationEnv:
         collision_data: Optional[Dict[str, Tuple[ArrayLike]]] = None,
         wb_xyz_min: Optional[ArrayLike] = None,
         wb_xyz_max: Optional[ArrayLike] = None,
-        bg_color: Optional[Tuple[float, float, float]] = None,
+        bg_color: Optional[ArrayLike] = None,
         load_floor: bool = True,
         qdot_max: Optional[ArrayLike] = None,
         tau_max: Optional[ArrayLike] = None,
