@@ -21,7 +21,7 @@ from cbfpy import CBF
 
 from oscbf.core.manipulator import Manipulator, load_panda
 from oscbf.core.manipulation_env import FrankaTorqueControlEnv
-from oscbf.core.oscbf_torque_config import OSCBFTorqueConfig
+from oscbf.core.oscbf_configs import OSCBFTorqueConfig
 from oscbf.utils.controllers import PoseTaskTorqueController
 
 
