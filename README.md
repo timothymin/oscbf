@@ -58,11 +58,12 @@ See the CBFpy documentation, available at [this link](https://danielpmorton.gith
 
 ## Citation
 ```
-@misc{morton2025oscbf,
-        author = {Morton, Daniel and Pavone, Marco},
-        title = {Safe, Task-Consistent Manipulation with Operational Space Control Barrier Functions},
-        year = {2025},
-        note = {Submitted to IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), Hangzhou, 2025},
+@article{morton2025oscbf,
+      author = {Morton, Daniel and Pavone, Marco},
+      title = {Safe, Task-Consistent Manipulation with Operational Space Control Barrier Functions},
+      year = {2025},
+      journal = {arXiv preprint arXiv:2503.06736},
+      note = {Submitted to IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), Hangzhou, 2025},
       }
 ```
 
