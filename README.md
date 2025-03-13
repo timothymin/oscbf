@@ -1,8 +1,11 @@
+![oscbf_gif](https://github.com/user-attachments/assets/43b615a3-dcec-4fc4-bc7f-2ba674562323)
+
 # Operational Space Control Barrier Functions
 
 Code for *"Safe, Task-Consistent Manipulation with Operational Space Control Barrier Functions"* -- Daniel Morton and Marco Pavone
 
 Submitted to IROS 2025, Hangzhou
+
 
 ## What is OSCBF?
 
