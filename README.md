@@ -53,6 +53,8 @@ pip install -e .
 
 Note: This code will work with most versions of `jax`, but there seems to have been a CPU slowdown introduced in version `0.4.32`. To avoid this, I use version `0.4.30`, which is the version indicated in this repo's `pyproject.toml` as well. However, feel free to use any version you like.
 
+This has been tested on Python 3.10 and 3.11, on Ubuntu 22.04.
+
 
 ## Documentation
 
