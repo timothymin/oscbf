@@ -1,7 +1,7 @@
 """
 # Operational Space Control
 
-Using torque control as well as velocity control to map between the Operational (Task / End-Effector) 
+Using torque control as well as velocity control to map between the Operational (Task / End-Effector)
 Space and the Joint Space
 
 These controllers are written to be independent of whatever software is used to get the robot's
@@ -13,8 +13,8 @@ state / kinematics / dynamics. For instance, we need to know the following detai
 
 These values can be obtained from simulation, a real robot, or other robot kinematics + dynamics packages.
 
-For simplicity, we assume that the robot is operating in 3D and that the task is to control the 
-position and orientation of the end-effector (6D task). If a different task jacobian is desired, 
+For simplicity, we assume that the robot is operating in 3D and that the task is to control the
+position and orientation of the end-effector (6D task). If a different task jacobian is desired,
 this will require some slight modifications to the code (likely, to include a task selection matrix,
 which depends on your preferred position/orientation representation).
 """
@@ -152,16 +152,18 @@ class PoseTaskTorqueController:
         task_inertia_inv = J @ M_inv @ J.T
         task_inertia = jnp.linalg.inv(task_inertia_inv)
         J_bar = M_inv @ J.T @ task_inertia
-        p_bar = J_bar.T @ g
 
-        # Compute task torques
+        # Compute operational space task torques
         task_accel = (
             jnp.concatenate([des_accel, des_alpha])
             - self.kp_task * task_p_error
             - self.kd_task * task_d_error
         )
         task_wrench = task_inertia @ task_accel
-        tau = J.T @ (task_wrench + p_bar)
+        tau = J.T @ task_wrench
+
+        # Add compensation for nonlinear effects
+        tau += g + c
 
         if self.is_redundant:
             # Nullspace projection
@@ -171,7 +173,7 @@ class PoseTaskTorqueController:
             qdot_error = qdot - des_qdot
             joint_accel = -self.kp_joint * q_error - self.kd_joint * qdot_error
             secondary_joint_torques = M @ joint_accel
-            tau += NT @ (secondary_joint_torques + g)
+            tau += NT @ secondary_joint_torques
 
         # Clamp to torque limits
         return jnp.clip(tau, self.tau_min, self.tau_max)
@@ -390,14 +392,16 @@ class PositionTaskTorqueController:
         task_inertia_inv = Jv @ M_inv @ Jv.T
         task_inertia = jnp.linalg.inv(task_inertia_inv)
         J_bar = M_inv @ Jv.T @ task_inertia
-        p_bar = J_bar.T @ g
 
-        # Compute task torques
+        # Compute operational space task torques
         task_accel = (
             des_accel - self.kp_task * task_p_error - self.kd_task * task_d_error
         )
         task_force = task_inertia @ task_accel
-        tau = Jv.T @ (task_force + p_bar)
+        tau = Jv.T @ task_force
+
+        # Add compensation for nonlinear effects
+        tau += g + c
 
         if self.is_redundant:
             # Nullspace projection
@@ -407,7 +411,7 @@ class PositionTaskTorqueController:
             qdot_error = qdot - des_qdot
             joint_accel = -self.kp_joint * q_error - self.kd_joint * qdot_error
             secondary_joint_torques = M @ joint_accel
-            tau += NT @ (secondary_joint_torques + g)
+            tau += NT @ secondary_joint_torques
 
         # Clamp to torque limits
         return jnp.clip(tau, self.tau_min, self.tau_max)
