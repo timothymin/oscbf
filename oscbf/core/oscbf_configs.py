@@ -6,7 +6,7 @@ velocity control and torque control.
 (These objectives assume that the desired task is tracking a desired pose
 with a secondary null space posture target)
 
-Note: The CBFs themselves are not included in this file. These should 
+Note: The CBFs themselves are not included in this file. These should
 inherit from these configs, and implement the h_1/h_2 methods
 depending on the desired safety criteria. For examples of this,
 see the `oscbf/examples` folder
@@ -17,8 +17,6 @@ import numpy as np
 from cbfpy import CBFConfig
 
 from oscbf.core.manipulator import Manipulator
-
-USE_CENTRIFUGAL_CORIOLIS_IN_CBF = True
 
 
 class OSCBFTorqueConfig(CBFConfig):
@@ -35,6 +33,8 @@ class OSCBFTorqueConfig(CBFConfig):
             impact on the end-effector's orientation tracking performance. Defaults to 1.0.
         joint_obj_weight (float, optional): Objective function weight for the safety filter's
             impact on the joint space tracking performance. Defaults to 1.0.
+        compensate_centrifugal_coriolis (bool, optional): Whether to compensate for centrifugal/coriolis
+            terms in the robot dynamics. This term is often neglected (set to False). Defaults to True.
     """
 
     def __init__(
@@ -43,16 +43,18 @@ class OSCBFTorqueConfig(CBFConfig):
         pos_obj_weight: float = 1.0,
         rot_obj_weight: float = 1.0,
         joint_obj_weight: float = 1.0,
+        compensate_centrifugal_coriolis: bool = True,
     ):
         assert isinstance(robot, Manipulator)
         assert isinstance(pos_obj_weight, (tuple, float)) and pos_obj_weight >= 0
         assert isinstance(rot_obj_weight, (tuple, float)) and rot_obj_weight >= 0
         assert isinstance(joint_obj_weight, (tuple, float)) and joint_obj_weight >= 0
+        assert isinstance(compensate_centrifugal_coriolis, bool)
         self.robot = robot
         self.num_joints = self.robot.num_joints
         self.task_dim = 6  # Pose
         self.is_redundant = self.robot.num_joints > self.task_dim
-
+        self.compensate_centrifugal_coriolis = compensate_centrifugal_coriolis
         self.pos_obj_weight = float(pos_obj_weight)
         self.rot_obj_weight = float(rot_obj_weight)
         self.joint_space_obj_weight = float(joint_obj_weight)
@@ -78,7 +80,7 @@ class OSCBFTorqueConfig(CBFConfig):
         M = self.robot.mass_matrix(q)
         M_inv = jnp.linalg.inv(M)
         bias = self.robot.gravity_vector(q)
-        if USE_CENTRIFUGAL_CORIOLIS_IN_CBF:
+        if self.compensate_centrifugal_coriolis:
             bias += self.robot.centrifugal_coriolis_vector(q, q_dot)
         return jnp.concatenate(
             [

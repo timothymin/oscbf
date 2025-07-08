@@ -36,10 +36,18 @@ PICTURE_IDXS = [1000, 1250, 1600, 1900, 2200]
 @jax.tree_util.register_static
 class EESafeSetTorqueConfig(OSCBFTorqueConfig):
 
-    def __init__(self, robot: Manipulator, pos_min: ArrayLike, pos_max: ArrayLike):
+    def __init__(
+        self,
+        robot: Manipulator,
+        pos_min: ArrayLike,
+        pos_max: ArrayLike,
+        compensate_centrifugal_coriolis: bool,
+    ):
         self.pos_min = np.asarray(pos_min)
         self.pos_max = np.asarray(pos_max)
-        super().__init__(robot)
+        super().__init__(
+            robot, compensate_centrifugal_coriolis=compensate_centrifugal_coriolis
+        )
 
     def h_2(self, z, **kwargs):
         q = z[: self.num_joints]
@@ -73,17 +81,22 @@ class EESafeSetVelocityConfig(OSCBFVelocityConfig):
         return 10.0 * h_2
 
 
-# @partial(jax.jit, static_argnums=(0, 1, 2))
+# @partial(jax.jit, static_argnums=(0, 1, 2, 3))
 def compute_torque_control(
     robot: Manipulator,
     osc_controller: PoseTaskTorqueController,
     cbf: CBF,
+    compensate_centrifugal_coriolis: bool,
     z: ArrayLike,
     z_ee_des: ArrayLike,
 ):
     q = z[: robot.num_joints]
     qdot = z[robot.num_joints :]
     M, M_inv, g, c, J, ee_tmat = robot.torque_control_matrices(q, qdot)
+
+    if not compensate_centrifugal_coriolis:
+        c = jnp.zeros(robot.num_joints)
+
     # Set nullspace desired joint position
     nullspace_posture_goal = jnp.array(
         [
@@ -162,7 +175,16 @@ def main(control_method="torque"):
     pos_min = (0.25, -0.25, 0.25)
     pos_max = (0.65, 0.25, 0.65)
 
-    torque_config = EESafeSetTorqueConfig(robot, pos_min, pos_max)
+    # NOTE: This term has a noticeable impact on the performance for this demo.
+    # It's often neglected due to computational demands and model error
+    compensate_centrifugal_coriolis = False
+
+    torque_config = EESafeSetTorqueConfig(
+        robot,
+        pos_min,
+        pos_max,
+        compensate_centrifugal_coriolis=compensate_centrifugal_coriolis,
+    )
     torque_cbf = CBF.from_config(torque_config)
     velocity_config = EESafeSetVelocityConfig(robot, pos_min, pos_max)
     velocity_cbf = CBF.from_config(velocity_config)
@@ -239,7 +261,12 @@ def main(control_method="torque"):
     @jax.jit
     def compute_torque_control_jit(z, z_ee_des):
         return compute_torque_control(
-            robot, osc_torque_controller, torque_cbf, z, z_ee_des
+            robot,
+            osc_torque_controller,
+            torque_cbf,
+            compensate_centrifugal_coriolis,
+            z,
+            z_ee_des,
         )
 
     @jax.jit
