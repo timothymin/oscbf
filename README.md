@@ -4,8 +4,9 @@
 
 Code for *"Safe, Task-Consistent Manipulation with Operational Space Control Barrier Functions"* -- Daniel Morton and Marco Pavone
 
-Submitted to IROS 2025, Hangzhou
+Accepted to IROS 2025, Hangzhou
 
+[![Paper](http://img.shields.io/badge/arXiv-2503.06736-B31B1B.svg)](https://arxiv.org/abs/2503.06736)
 
 ## What is OSCBF?
 
@@ -68,7 +69,7 @@ See the CBFpy documentation, available at [this link](https://danielpmorton.gith
       title = {Safe, Task-Consistent Manipulation with Operational Space Control Barrier Functions},
       year = {2025},
       journal = {arXiv preprint arXiv:2503.06736},
-      note = {Submitted to IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), Hangzhou, 2025},
+      note = {Accepted to IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), Hangzhou, 2025},
       }
 ```
 
