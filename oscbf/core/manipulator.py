@@ -157,7 +157,7 @@ def joint_transform(
     ) + joint_type * prismatic_transform(joint_pos, joint_axis)
 
 
-@jax.tree_util.register_static
+@jax.tree_util.register_pytree_node_class
 class Manipulator:
     """Manipulator kinematics and dynamics
 
@@ -309,6 +309,60 @@ class Manipulator:
             ee_offset=ee_offset,
             collision_positions=collision_positions,
             collision_radii=collision_radii,
+        )
+
+    def tree_flatten(self):
+        """Flatten this pytree node for JAX tree operations.
+        
+        Since all attributes are static/immutable, we return them all as auxiliary data.
+        """
+        return ([], {
+            'num_joints': self.num_joints,
+            'joint_types': self.joint_types,
+            'joint_lower_limits': self.joint_lower_limits,
+            'joint_upper_limits': self.joint_upper_limits,
+            'joint_max_forces': self.joint_max_forces,
+            'joint_max_velocities': self.joint_max_velocities,
+            'joint_axes': self.joint_axes,
+            'joint_parent_frame_positions': self.joint_parent_frame_positions,
+            'joint_parent_frame_rotations': self.joint_parent_frame_rotations,
+            'link_masses': self.link_masses,
+            'link_local_inertias': self.link_local_inertias,
+            'link_local_inertia_positions': self.link_local_inertia_positions,
+            'link_local_inertia_rotations': self.link_local_inertia_rotations,
+            'base_pos': self.base_pos,
+            'base_orn': self.base_orn,
+            'ee_offset': self.ee_offset,
+            'collision_positions': self.collision_positions,
+            'collision_radii': self.collision_radii,
+            'joint_to_prev_joint_tfs': self.joint_to_prev_joint_tfs,
+            'link_com_to_prev_joint_tfs': self.link_com_to_prev_joint_tfs,
+            'has_collision_data': self.has_collision_data
+        })
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        """Unflatten this pytree node from JAX tree operations."""
+        # Since we have no dynamic children, just recreate from aux_data
+        return cls(
+            num_joints=aux_data['num_joints'],
+            joint_types=aux_data['joint_types'],
+            joint_lower_limits=aux_data['joint_lower_limits'],
+            joint_upper_limits=aux_data['joint_upper_limits'],
+            joint_max_forces=aux_data['joint_max_forces'],
+            joint_max_velocities=aux_data['joint_max_velocities'],
+            joint_axes=aux_data['joint_axes'],
+            joint_parent_frame_positions=aux_data['joint_parent_frame_positions'],
+            joint_parent_frame_rotations=aux_data['joint_parent_frame_rotations'],
+            link_masses=aux_data['link_masses'],
+            link_local_inertias=aux_data['link_local_inertias'],
+            link_local_inertia_positions=aux_data['link_local_inertia_positions'],
+            link_local_inertia_rotations=aux_data['link_local_inertia_rotations'],
+            base_pos=aux_data['base_pos'],
+            base_orn=aux_data['base_orn'],
+            ee_offset=aux_data['ee_offset'],
+            collision_positions=aux_data['collision_positions'],
+            collision_radii=aux_data['collision_radii']
         )
 
     def joint_to_world_transforms(self, q: Array) -> Array:

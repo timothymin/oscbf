@@ -27,7 +27,7 @@ from jax import Array
 from jax.typing import ArrayLike
 
 
-@jax.tree_util.register_static
+@jax.tree_util.register_pytree_node_class
 class PoseTaskTorqueController:
     """Operational Space Torque Controller for 6D position and orientation tasks
 
@@ -178,8 +178,56 @@ class PoseTaskTorqueController:
         # Clamp to torque limits
         return jnp.clip(tau, self.tau_min, self.tau_max)
 
+    def tree_flatten(self):
+        """Flatten the PoseTaskTorqueController object for JAX pytree registration."""
+        children = ()  # No dynamic JAX arrays in this object
+        aux_data = (
+            self.dim_space,
+            self.dim_task,
+            self.n_joints,
+            self.is_redundant,
+            self.kp_task,
+            self.kd_task,
+            self.kp_joint,
+            self.kd_joint,
+            self.tau_min,
+            self.tau_max,
+        )
+        return children, aux_data
 
-@jax.tree_util.register_static
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        """Reconstruct the PoseTaskTorqueController object from flattened representation."""
+        (
+            dim_space,
+            dim_task,
+            n_joints,
+            is_redundant,
+            kp_task,
+            kd_task,
+            kp_joint,
+            kd_joint,
+            tau_min,
+            tau_max,
+        ) = aux_data
+        
+        # Create a new instance without going through __init__ validation
+        instance = cls.__new__(cls)
+        instance.dim_space = dim_space
+        instance.dim_task = dim_task
+        instance.n_joints = n_joints
+        instance.is_redundant = is_redundant
+        instance.kp_task = kp_task
+        instance.kd_task = kd_task
+        instance.kp_joint = kp_joint
+        instance.kd_joint = kd_joint
+        instance.tau_min = tau_min
+        instance.tau_max = tau_max
+        
+        return instance
+
+
+@jax.tree_util.register_pytree_node_class
 class PoseTaskVelocityController:
     """Operational Space Velocity Controller for 6D position and orientation tasks
 
@@ -285,8 +333,50 @@ class PoseTaskVelocityController:
         # Clamp to velocity limits
         return jnp.clip(v, self.qdot_min, self.qdot_max)
 
+    def tree_flatten(self):
+        """Flatten the PoseTaskVelocityController object for JAX pytree registration."""
+        children = ()  # No dynamic JAX arrays in this object
+        aux_data = (
+            self.dim_space,
+            self.dim_task,
+            self.n_joints,
+            self.is_redundant,
+            self.kp_task,
+            self.kp_joint,
+            self.qdot_min,
+            self.qdot_max,
+        )
+        return children, aux_data
 
-@jax.tree_util.register_static
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        """Reconstruct the PoseTaskVelocityController object from flattened representation."""
+        (
+            dim_space,
+            dim_task,
+            n_joints,
+            is_redundant,
+            kp_task,
+            kp_joint,
+            qdot_min,
+            qdot_max,
+        ) = aux_data
+        
+        # Create a new instance without going through __init__ validation
+        instance = cls.__new__(cls)
+        instance.dim_space = dim_space
+        instance.dim_task = dim_task
+        instance.n_joints = n_joints
+        instance.is_redundant = is_redundant
+        instance.kp_task = kp_task
+        instance.kp_joint = kp_joint
+        instance.qdot_min = qdot_min
+        instance.qdot_max = qdot_max
+        
+        return instance
+
+
+@jax.tree_util.register_pytree_node_class
 class PositionTaskTorqueController:
     """Operational Space Torque Controller for 3D positional tasks
 
@@ -416,8 +506,56 @@ class PositionTaskTorqueController:
         # Clamp to torque limits
         return jnp.clip(tau, self.tau_min, self.tau_max)
 
+    def tree_flatten(self):
+        """Flatten the PositionTaskTorqueController object for JAX pytree registration."""
+        children = ()  # No dynamic JAX arrays in this object
+        aux_data = (
+            self.dim_space,
+            self.dim_task,
+            self.n_joints,
+            self.is_redundant,
+            self.kp_task,
+            self.kd_task,
+            self.kp_joint,
+            self.kd_joint,
+            self.tau_min,
+            self.tau_max,
+        )
+        return children, aux_data
 
-@jax.tree_util.register_static
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        """Reconstruct the PositionTaskTorqueController object from flattened representation."""
+        (
+            dim_space,
+            dim_task,
+            n_joints,
+            is_redundant,
+            kp_task,
+            kd_task,
+            kp_joint,
+            kd_joint,
+            tau_min,
+            tau_max,
+        ) = aux_data
+        
+        # Create a new instance without going through __init__ validation
+        instance = cls.__new__(cls)
+        instance.dim_space = dim_space
+        instance.dim_task = dim_task
+        instance.n_joints = n_joints
+        instance.is_redundant = is_redundant
+        instance.kp_task = kp_task
+        instance.kd_task = kd_task
+        instance.kp_joint = kp_joint
+        instance.kd_joint = kd_joint
+        instance.tau_min = tau_min
+        instance.tau_max = tau_max
+        
+        return instance
+
+
+@jax.tree_util.register_pytree_node_class
 class PositionTaskVelocityController:
     """Operational Space Velocity Controller for 3D positional tasks
 
@@ -510,6 +648,48 @@ class PositionTaskVelocityController:
 
         # Clamp to velocity limits
         return jnp.clip(v, self.qdot_min, self.qdot_max)
+
+    def tree_flatten(self):
+        """Flatten the PositionTaskVelocityController object for JAX pytree registration."""
+        children = ()  # No dynamic JAX arrays in this object
+        aux_data = (
+            self.dim_space,
+            self.dim_task,
+            self.n_joints,
+            self.is_redundant,
+            self.kp_task,
+            self.kp_joint,
+            self.qdot_min,
+            self.qdot_max,
+        )
+        return children, aux_data
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        """Reconstruct the PositionTaskVelocityController object from flattened representation."""
+        (
+            dim_space,
+            dim_task,
+            n_joints,
+            is_redundant,
+            kp_task,
+            kp_joint,
+            qdot_min,
+            qdot_max,
+        ) = aux_data
+        
+        # Create a new instance without going through __init__ validation
+        instance = cls.__new__(cls)
+        instance.dim_space = dim_space
+        instance.dim_task = dim_task
+        instance.n_joints = n_joints
+        instance.is_redundant = is_redundant
+        instance.kp_task = kp_task
+        instance.kp_joint = kp_joint
+        instance.qdot_min = qdot_min
+        instance.qdot_max = qdot_max
+        
+        return instance
 
 
 # Helper functions

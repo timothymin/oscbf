@@ -33,7 +33,7 @@ RECORD_VIDEO = False
 PICTURE_IDXS = [1000, 1250, 1600, 1900, 2200]
 
 
-@jax.tree_util.register_static
+@jax.tree_util.register_pytree_node_class
 class EESafeSetTorqueConfig(OSCBFTorqueConfig):
 
     def __init__(
@@ -60,8 +60,65 @@ class EESafeSetTorqueConfig(OSCBFTorqueConfig):
     def alpha_2(self, h_2):
         return 10.0 * h_2
 
+    def tree_flatten(self):
+        """Flatten the EESafeSetTorqueConfig object for JAX pytree registration."""
+        children = ()  # No dynamic JAX arrays in this object
+        aux_data = (
+            self.pos_min,
+            self.pos_max,
+            self.robot,
+            self.num_joints,
+            self.n,
+            self.m,
+            self.num_cbf,
+            self.u_min,
+            self.u_max,
+            self.control_constrained,
+            self.relax_cbf,
+            self.cbf_relaxation_penalty,
+            self.solver_tol,
+        )
+        return children, aux_data
 
-@jax.tree_util.register_static
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        """Reconstruct the EESafeSetTorqueConfig object from flattened representation."""
+        (
+            pos_min,
+            pos_max,
+            robot,
+            num_joints,
+            n,
+            m,
+            num_cbf,
+            u_min,
+            u_max,
+            control_constrained,
+            relax_cbf,
+            cbf_relaxation_penalty,
+            solver_tol,
+        ) = aux_data
+        
+        # Create a new instance without going through __init__ validation
+        instance = cls.__new__(cls)
+        instance.pos_min = pos_min
+        instance.pos_max = pos_max
+        instance.robot = robot
+        instance.num_joints = num_joints
+        instance.n = n
+        instance.m = m
+        instance.num_cbf = num_cbf
+        instance.u_min = u_min
+        instance.u_max = u_max
+        instance.control_constrained = control_constrained
+        instance.relax_cbf = relax_cbf
+        instance.cbf_relaxation_penalty = cbf_relaxation_penalty
+        instance.solver_tol = solver_tol
+        
+        return instance
+
+
+@jax.tree_util.register_pytree_node_class
 class EESafeSetVelocityConfig(OSCBFVelocityConfig):
 
     def __init__(self, robot: Manipulator, pos_min: ArrayLike, pos_max: ArrayLike):
@@ -79,6 +136,63 @@ class EESafeSetVelocityConfig(OSCBFVelocityConfig):
 
     def alpha_2(self, h_2):
         return 10.0 * h_2
+
+    def tree_flatten(self):
+        """Flatten the EESafeSetVelocityConfig object for JAX pytree registration."""
+        children = ()  # No dynamic JAX arrays in this object
+        aux_data = (
+            self.pos_min,
+            self.pos_max,
+            self.robot,
+            self.num_joints,
+            self.n,
+            self.m,
+            self.num_cbf,
+            self.u_min,
+            self.u_max,
+            self.control_constrained,
+            self.relax_cbf,
+            self.cbf_relaxation_penalty,
+            self.solver_tol,
+        )
+        return children, aux_data
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        """Reconstruct the EESafeSetVelocityConfig object from flattened representation."""
+        (
+            pos_min,
+            pos_max,
+            robot,
+            num_joints,
+            n,
+            m,
+            num_cbf,
+            u_min,
+            u_max,
+            control_constrained,
+            relax_cbf,
+            cbf_relaxation_penalty,
+            solver_tol,
+        ) = aux_data
+        
+        # Create a new instance without going through __init__ validation
+        instance = cls.__new__(cls)
+        instance.pos_min = pos_min
+        instance.pos_max = pos_max
+        instance.robot = robot
+        instance.num_joints = num_joints
+        instance.n = n
+        instance.m = m
+        instance.num_cbf = num_cbf
+        instance.u_min = u_min
+        instance.u_max = u_max
+        instance.control_constrained = control_constrained
+        instance.relax_cbf = relax_cbf
+        instance.cbf_relaxation_penalty = cbf_relaxation_penalty
+        instance.solver_tol = solver_tol
+        
+        return instance
 
 
 # @partial(jax.jit, static_argnums=(0, 1, 2, 3))

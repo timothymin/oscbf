@@ -25,7 +25,7 @@ from oscbf.core.oscbf_configs import OSCBFTorqueConfig
 from oscbf.core.controllers import PoseTaskTorqueController
 
 
-@jax.tree_util.register_static
+@jax.tree_util.register_pytree_node_class
 class CombinedConfig(OSCBFTorqueConfig):
 
     def __init__(
@@ -109,6 +109,87 @@ class CombinedConfig(OSCBFTorqueConfig):
 
     def alpha_2(self, h_2):
         return 10.0 * h_2
+
+    def tree_flatten(self):
+        """Flatten the CombinedConfig object for JAX pytree registration."""
+        children = ()  # No dynamic JAX arrays in this object
+        aux_data = (
+            self.pos_min,
+            self.pos_max,
+            self.q_min,
+            self.q_max,
+            self.singularity_tol,
+            self.collision_positions,
+            self.collision_radii,
+            self.num_collision_bodies,
+            self.whole_body_pos_min,
+            self.whole_body_pos_max,
+            self.robot,
+            self.num_joints,
+            self.n,
+            self.m,
+            self.num_cbf,
+            self.u_min,
+            self.u_max,
+            self.control_constrained,
+            self.relax_cbf,
+            self.cbf_relaxation_penalty,
+            self.solver_tol,
+        )
+        return children, aux_data
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        """Reconstruct the CombinedConfig object from flattened representation."""
+        (
+            pos_min,
+            pos_max,
+            q_min,
+            q_max,
+            singularity_tol,
+            collision_positions,
+            collision_radii,
+            num_collision_bodies,
+            whole_body_pos_min,
+            whole_body_pos_max,
+            robot,
+            num_joints,
+            n,
+            m,
+            num_cbf,
+            u_min,
+            u_max,
+            control_constrained,
+            relax_cbf,
+            cbf_relaxation_penalty,
+            solver_tol,
+        ) = aux_data
+        
+        # Create a new instance without going through __init__ validation
+        instance = cls.__new__(cls)
+        instance.pos_min = pos_min
+        instance.pos_max = pos_max
+        instance.q_min = q_min
+        instance.q_max = q_max
+        instance.singularity_tol = singularity_tol
+        instance.collision_positions = collision_positions
+        instance.collision_radii = collision_radii
+        instance.num_collision_bodies = num_collision_bodies
+        instance.whole_body_pos_min = whole_body_pos_min
+        instance.whole_body_pos_max = whole_body_pos_max
+        instance.robot = robot
+        instance.num_joints = num_joints
+        instance.n = n
+        instance.m = m
+        instance.num_cbf = num_cbf
+        instance.u_min = u_min
+        instance.u_max = u_max
+        instance.control_constrained = control_constrained
+        instance.relax_cbf = relax_cbf
+        instance.cbf_relaxation_penalty = cbf_relaxation_penalty
+        instance.solver_tol = solver_tol
+        
+        return instance
 
 
 # @partial(jax.jit, static_argnums=(0, 1, 2))
