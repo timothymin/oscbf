@@ -1,0 +1,3 @@
+[submodule "cbfpy"]
+	path = cbfpy
+	url = git@github.com:timothymin/cbfpy.git
